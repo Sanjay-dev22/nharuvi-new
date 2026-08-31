@@ -97,23 +97,30 @@ function verifyEd25519(publicKeyB64: string, message: string, signatureB64: stri
 // we've explicitly recorded here -- honest scope, not full automatic
 // discovery. Extend this map (or replace it with a real directory lookup)
 // as we test against real counterparties.
-const KNOWN_COUNTERPARTIES: Record<string, { namespace: string; registry: string; recordId: string }> = {
+const KNOWN_COUNTERPARTIES: Record<string, { namespace: string; recordId: string }> = {
   // Ourselves -- for the self-loopback test: send a real signed message from
   // our own key to our own endpoint, resolving the sender's key via the
-  // real, live DeDi lookup (not a hardcoded shortcut), exactly as it would
+  // real, live fabric lookup (not a hardcoded shortcut), exactly as it would
   // work for any other real counterparty.
   "www.nharuvi.com": {
     namespace: "nharuvi.com",
-    registry: "deg-beckn-subscribers",
     recordId: "76EU8UfYDb3JFXRnNUZkJGGeN7b1s43Y4o7TpPony7AF1ryx5jEyCb",
   },
-  // "some-bpp.example.com": { namespace: "...", registry: "deg-beckn-subscribers", recordId: "..." },
+  // "some-bpp.example.com": { namespace: "...", recordId: "..." },
 };
 
+// This is the actual URL pattern real Beckn nodes resolve subscriber
+// records through -- confirmed against beckn-onix's own docs (setup-register.md
+// §1.6's verification example uses this exact host/path), and against a real
+// lookup that returned our own record correctly. "subscribers.beckn.one" is a
+// fixed fabric schema keyword, not our registry's name -- an earlier version
+// of this function wrongly used the api.dedi.global dashboard-style URL with
+// our registry name in that slot, which 404's; caught by actually running
+// the self-loopback test, not assumed correct from reading docs alone.
 async function resolveSigningPublicKey(subscriberId: string): Promise<string | null> {
   const known = KNOWN_COUNTERPARTIES[subscriberId];
   if (!known) return null;
-  const url = `https://api.dedi.global/dedi/lookup/${known.namespace}/${known.registry}/${known.recordId}`;
+  const url = `https://fabric.nfh.global/registry/dedi/lookup/${known.namespace}/subscribers.beckn.one/${known.recordId}`;
   const res = await fetch(url, { cache: "no-store" });
   if (!res.ok) return null;
   const json = await res.json();
@@ -168,7 +175,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         message: { ack: { status: "NACK" } },
-        error: { code: "AUT_SIGNATURE_INVALID", message: `cannot resolve signing key for unknown subscriber "${parsed.subscriberId}" -- add it to KNOWN_COUNTERPARTIES` },
+        error: { code: "AUT_SIGNATURE_INVALID", message: `cannot resolve signing key for subscriber "${parsed.subscriberId}" -- either not in KNOWN_COUNTERPARTIES, or the registry lookup itself failed (check server logs)` },
       },
       { status: 401 }
     );
