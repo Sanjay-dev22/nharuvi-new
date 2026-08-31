@@ -98,6 +98,15 @@ function verifyEd25519(publicKeyB64: string, message: string, signatureB64: stri
 // discovery. Extend this map (or replace it with a real directory lookup)
 // as we test against real counterparties.
 const KNOWN_COUNTERPARTIES: Record<string, { namespace: string; registry: string; recordId: string }> = {
+  // Ourselves -- for the self-loopback test: send a real signed message from
+  // our own key to our own endpoint, resolving the sender's key via the
+  // real, live DeDi lookup (not a hardcoded shortcut), exactly as it would
+  // work for any other real counterparty.
+  "www.nharuvi.com": {
+    namespace: "nharuvi.com",
+    registry: "deg-beckn-subscribers",
+    recordId: "76EU8UfYDb3JFXRnNUZkJGGeN7b1s43Y4o7TpPony7AF1ryx5jEyCb",
+  },
   // "some-bpp.example.com": { namespace: "...", registry: "deg-beckn-subscribers", recordId: "..." },
 };
 
