@@ -3,12 +3,12 @@
     "https://www.w3.org/ns/did/v1",
     "https://w3id.org/security/suites/jws-2020/v1"
   ],
-  "id": "did:web:nharuvi.com",
+  "id": "did:web:www.nharuvi.com",
   "verificationMethod": [
     {
-      "id": "did:web:nharuvi.com#key-0",
+      "id": "did:web:www.nharuvi.com#key-0",
       "type": "JsonWebKey2020",
-      "controller": "did:web:nharuvi.com",
+      "controller": "did:web:www.nharuvi.com",
       "publicKeyJwk": {
         "kty": "EC",
         "crv": "P-256",
@@ -18,9 +18,9 @@
     }
   ],
   "authentication": [
-    "did:web:nharuvi.com#key-0"
+    "did:web:www.nharuvi.com#key-0"
   ],
   "assertionMethod": [
-    "did:web:nharuvi.com#key-0"
+    "did:web:www.nharuvi.com#key-0"
   ]
 }
