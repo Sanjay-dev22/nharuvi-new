@@ -1,0 +1,1113 @@
+<meta charset="utf-8">
+<title>Grid Pulse</title>
+<style>
+  :root {
+    --void: #05080d;
+    --panel: #0d151f;
+    --panel2: #101a26;
+    --line: #1e2b3a;
+    --line-soft: #16212d;
+    --amber: #e8a33d;
+    --amber-dim: #6b4f24;
+    --current: #2fe0c6;
+    --alert: #ff5a4e;
+    --confirm: #4ade80;
+    --mist: #7c8ca0;
+    --mist-dim: #47576a;
+    --ink: #eef2f6;
+    --font-display: "Sora", system-ui, -apple-system, sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: var(--void); color: var(--ink); font-family: var(--font-display); overflow: hidden; }
+  button { font-family: inherit; }
+
+  #app { position: fixed; inset: 0; display: grid; grid-template-rows: auto 1fr auto; }
+
+  /* ============ TOP BAR ============ */
+  #topbar {
+    display: flex; align-items: center; gap: 18px;
+    padding: 10px 18px; border-bottom: 1px solid var(--line);
+    background: linear-gradient(180deg, #0a121b, #070d14);
+    z-index: 5;
+  }
+  .brand { display: flex; align-items: center; gap: 9px; flex: none; }
+  .brand-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--amber); box-shadow: 0 0 8px 2px var(--amber); }
+  .brand-name { font-family: var(--font-mono); font-size: 12.5px; letter-spacing: 0.1em; font-weight: 500; }
+  .brand-sub { font-size: 11px; color: var(--mist); letter-spacing: 0.02em; }
+
+  #flowPicker { display: flex; gap: 6px; flex-wrap: wrap; flex: 1; justify-content: center; }
+  .flow-btn {
+    background: var(--panel); border: 1px solid var(--line); color: var(--mist);
+    font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.03em;
+    padding: 6px 11px; border-radius: 3px; cursor: pointer; transition: all 0.15s ease;
+    white-space: nowrap;
+  }
+  .flow-btn:hover { border-color: var(--mist); color: var(--ink); }
+  .flow-btn.active { border-color: var(--amber); color: var(--amber); background: rgba(232,163,61,0.08); }
+  .flow-btn .fn { opacity: 0.55; margin-right: 5px; }
+  .flow-btn.tone-alert.active { border-color: var(--alert); color: var(--alert); background: rgba(255,90,78,0.08); }
+
+  #legendToggle {
+    flex: none; background: none; border: 1px solid var(--line); color: var(--mist);
+    font-size: 10.5px; padding: 6px 10px; border-radius: 3px; cursor: pointer;
+    font-family: var(--font-mono);
+  }
+  #legendToggle:hover { border-color: var(--mist); color: var(--ink); }
+
+  #modeToggle {
+    flex: none; background: var(--panel2); border: 1px solid var(--amber-dim); color: var(--amber);
+    font-size: 10.5px; padding: 6px 12px; border-radius: 3px; cursor: pointer;
+    font-family: var(--font-mono); letter-spacing: 0.04em; display: flex; align-items: center; gap: 6px;
+  }
+  #modeToggle:hover { border-color: var(--amber); background: rgba(232,163,61,0.1); }
+  #modeToggle.in3d { border-color: var(--current); color: var(--current); background: rgba(47,224,198,0.1); }
+  #modeToggle .dot3d { width: 6px; height: 6px; border-radius: 50%; background: currentColor; box-shadow: 0 0 6px currentColor; }
+
+  /* ============ STAGE (svg + panel) ============ */
+  #stage { position: relative; display: grid; grid-template-columns: 1fr 380px; overflow: hidden; min-height: 0; }
+  #svgWrap { grid-column: 1; grid-row: 1; position: relative; overflow: hidden; cursor: grab; background:
+    radial-gradient(ellipse at 50% 30%, #0a1420 0%, var(--void) 70%); }
+  #svgWrap.panning { cursor: grabbing; }
+  svg#net { width: 100%; height: 100%; display: block; }
+  #detail { grid-column: 2; grid-row: 1; }
+
+  #stage3d { grid-column: 1; grid-row: 1; position: relative; overflow: hidden; background: var(--void); display: none; }
+  #stage3d.show { display: block; }
+  #svgWrap.hidden3d { display: none; }
+  #graph3d { position: absolute; inset: 0; }
+  #hint3d {
+    position: absolute; left: 12px; bottom: 12px; z-index: 4;
+    font-family: var(--font-mono); font-size: 10.5px; color: var(--mist);
+    background: rgba(13,21,31,0.8); border: 1px solid var(--line); border-radius: 4px; padding: 7px 11px;
+    line-height: 1.6; pointer-events: none;
+  }
+  #hint3d b { color: var(--current); }
+
+  #resetCtl3d { position: absolute; left: 12px; top: 12px; z-index: 4; }
+  #resetCtl3d button {
+    display: flex; align-items: center; gap: 7px;
+    background: rgba(13,21,31,0.88); border: 1px solid var(--line); color: var(--ink);
+    font-family: var(--font-mono); font-size: 11px; padding: 7px 12px; border-radius: 4px; cursor: pointer;
+  }
+  #resetCtl3d button:hover { border-color: var(--current); color: var(--current); }
+
+  /* ============ zoom controls (2D) ============ */
+  #zoomCtl {
+    position: absolute; left: 12px; top: 12px; z-index: 4;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  #zoomCtl button {
+    width: 28px; height: 28px; border-radius: 4px; border: 1px solid var(--line); background: rgba(13,21,31,0.85);
+    color: var(--ink); cursor: pointer; font-size: 15px; line-height: 1; display: flex; align-items: center; justify-content: center;
+  }
+  #zoomCtl button:hover { border-color: var(--amber); color: var(--amber); }
+  #zoomCtl button.reset { font-size: 11px; font-family: var(--font-mono); }
+
+  .node-circle { cursor: pointer; transition: filter 0.2s ease; }
+  .node-circle:hover { filter: brightness(1.3); }
+  .node-label { font-family: var(--font-mono); font-size: 11px; fill: var(--ink); text-anchor: middle; pointer-events: none; font-weight: 500; }
+  .node-sub { font-family: var(--font-mono); font-size: 8.5px; fill: var(--mist); text-anchor: middle; pointer-events: none; letter-spacing: 0.02em; }
+  .node-tag { font-family: var(--font-mono); font-size: 8px; fill: var(--mist-dim); text-anchor: middle; pointer-events: none; letter-spacing: 0.08em; text-transform: uppercase; }
+  .edge { stroke: var(--line); stroke-width: 1.2; fill: none; }
+  .edge.dashed { stroke-dasharray: 3 4; opacity: 0.5; }
+  .region-label { font-family: var(--font-mono); font-size: 10px; fill: var(--mist-dim); letter-spacing: 0.16em; text-transform: uppercase; }
+  .region-box { fill: none; stroke: var(--line-soft); stroke-width: 1; stroke-dasharray: 2 5; }
+
+  .packet { filter: drop-shadow(0 0 6px currentColor); }
+
+  /* ============ DETAIL PANEL ============ */
+  #detail {
+    background: var(--panel); border-left: 1px solid var(--line);
+    display: flex; flex-direction: column; min-height: 0;
+  }
+  #detailHead {
+    padding: 14px 16px 12px; border-bottom: 1px solid var(--line); flex: none;
+  }
+  #detailHead .kk { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--amber); margin-bottom: 4px; }
+  #detailHead .tt { font-size: 15px; font-weight: 600; line-height: 1.35; }
+  #detailBody { flex: 1; overflow-y: auto; padding: 14px 16px; }
+  #detailBody::-webkit-scrollbar { width: 8px; }
+  #detailBody::-webkit-scrollbar-thumb { background: var(--line); border-radius: 4px; }
+
+  .d-section { margin-bottom: 18px; }
+  .d-section h4 {
+    font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--mist); margin: 0 0 8px; font-weight: 500;
+  }
+  .d-text { font-size: 13px; line-height: 1.55; color: #d7dee6; }
+  .d-text code { font-family: var(--font-mono); font-size: 0.92em; color: var(--amber); background: rgba(232,163,61,0.1); padding: 1px 5px; border-radius: 2px; }
+
+  .step-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
+  .step-list li {
+    display: flex; gap: 9px; align-items: flex-start; font-size: 12px; line-height: 1.5;
+    padding: 8px 10px; background: var(--panel2); border-radius: 4px; border-left: 2px solid var(--line);
+  }
+  .step-list li.hit { border-left-color: var(--amber); }
+  .step-list li.noop { opacity: 0.5; }
+  .step-list .sname { font-family: var(--font-mono); font-weight: 500; color: var(--ink); flex: none; min-width: 148px; }
+  .step-list .sdesc { color: var(--mist); }
+
+  .payload-box {
+    background: #070c12; border: 1px solid var(--line); border-radius: 4px;
+    font-family: var(--font-mono); font-size: 11px; line-height: 1.55;
+    padding: 10px 12px; overflow-x: auto; white-space: pre;
+    max-height: 320px; overflow-y: auto;
+  }
+  .payload-box .jk { color: #6fa8dc; }
+  .payload-box .js { color: #b5cea8; }
+  .payload-box .jn { color: var(--amber); }
+  .payload-box .jb { color: var(--current); }
+
+  .meta-grid { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 12px; }
+  .meta-grid dt { color: var(--mist); font-family: var(--font-mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; }
+  .meta-grid dd { margin: 0; color: var(--ink); font-family: var(--font-mono); }
+
+  .badge { display: inline-block; font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.06em; padding: 2px 8px; border-radius: 10px; border: 1px solid; }
+  .badge.ack { color: var(--confirm); border-color: var(--confirm); background: rgba(74,222,128,0.08); }
+  .badge.nack { color: var(--alert); border-color: var(--alert); background: rgba(255,90,78,0.08); }
+  .badge.async { color: var(--current); border-color: var(--current); background: rgba(47,224,198,0.08); }
+
+  .empty-hint { color: var(--mist); font-size: 12.5px; line-height: 1.6; padding: 6px 2px; }
+  .empty-hint b { color: var(--ink); }
+
+  /* ============ BOTTOM TRANSPORT ============ */
+  #transport {
+    display: flex; align-items: center; gap: 14px; padding: 10px 18px;
+    border-top: 1px solid var(--line); background: linear-gradient(0deg, #0a121b, #070d14);
+    z-index: 5;
+  }
+  .tbtn {
+    background: var(--panel2); border: 1px solid var(--line); color: var(--ink);
+    width: 34px; height: 34px; border-radius: 4px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; font-size: 13px;
+    transition: border-color 0.15s ease;
+  }
+  .tbtn:hover:not(:disabled) { border-color: var(--amber); }
+  .tbtn:disabled { opacity: 0.3; cursor: default; }
+  #playBtn { width: 56px; border-color: var(--amber); color: var(--amber); }
+
+  #speedCtl { display: flex; align-items: center; gap: 8px; flex: none; padding: 0 2px; }
+  #speedCtl .sc-k { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--mist-dim); }
+  #speedLabel { font-family: var(--font-mono); font-size: 11px; color: var(--amber); min-width: 34px; text-align: right; }
+  #speedSlider {
+    width: 88px; height: 3px; accent-color: var(--amber); cursor: pointer;
+    background: var(--line); border-radius: 2px;
+  }
+
+  #hopRail { flex: 1; display: flex; gap: 4px; align-items: center; min-width: 0; overflow-x: auto; padding: 2px 0; }
+  .hop-tick {
+    flex: none; width: 30px; height: 22px; border-radius: 3px; border: 1px solid var(--line);
+    background: var(--panel2); cursor: pointer; display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-mono); font-size: 9px; color: var(--mist-dim); transition: all 0.15s ease;
+  }
+  .hop-tick:hover { border-color: var(--mist); color: var(--ink); }
+  .hop-tick.done { background: rgba(124,140,160,0.12); color: var(--mist); }
+  .hop-tick.active { border-color: var(--amber); color: var(--amber); background: rgba(232,163,61,0.12); }
+  .hop-tick.nack { border-color: var(--alert); color: var(--alert); }
+
+  #hopLabel { flex: none; font-family: var(--font-mono); font-size: 11px; color: var(--mist); min-width: 128px; text-align: right; }
+  #hopLabel .n { color: var(--amber); }
+
+  /* ============ LEGEND overlay ============ */
+  #legend {
+    position: absolute; top: 12px; right: 12px; width: 250px; background: rgba(13,21,31,0.94);
+    border: 1px solid var(--line); border-radius: 5px; padding: 12px 14px; font-size: 11.5px;
+    display: none; z-index: 6; backdrop-filter: blur(4px);
+  }
+  #legend.show { display: block; }
+  #legend h5 { margin: 0 0 8px; font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--mist); }
+  #legend .lrow { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; color: #d7dee6; }
+  #legend .lswatch { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+  #legend .lline { width: 18px; height: 0; border-top: 2px solid; flex: none; }
+
+  @media (max-width: 900px) {
+    #stage { grid-template-columns: 1fr; grid-template-rows: 1fr 260px; }
+    #detail { border-left: none; border-top: 1px solid var(--line); }
+  }
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&amp;family=Sora:wght@400;500;600&amp;display=swap" rel="stylesheet">
+
+<div id="app">
+  <div id="topbar">
+    <div class="brand">
+      <div class="brand-dot"></div>
+      <div>
+        <div class="brand-name">GRID PULSE</div>
+        <div class="brand-sub">Protocol Inspector · real hop-by-hop P2P trade</div>
+      </div>
+    </div>
+    <div id="flowPicker"></div>
+    <button id="modeToggle" type="button"><span class="dot3d"></span><span id="modeToggleLabel">Enter 3D mode</span></button>
+    <button id="legendToggle" type="button">Legend</button>
+  </div>
+
+  <div id="stage">
+    <div id="svgWrap">
+      <div id="zoomCtl">
+        <button id="zoomIn" type="button" title="Zoom in">+</button>
+        <button id="zoomOut" type="button" title="Zoom out">&#8722;</button>
+        <button id="zoomReset" class="reset" type="button" title="Reset view">&#8862;</button>
+      </div>
+      <svg id="net" viewBox="0 0 1400 800" preserveAspectRatio="xMidYMid meet"></svg>
+      <div id="legend">
+        <h5>Node colors</h5>
+        <div class="lrow"><span class="lswatch" style="background:#e8a33d"></span> App / sandbox (business logic)</div>
+        <div class="lrow"><span class="lswatch" style="background:#6fa8dc"></span> Onix adapter (sign · verify · route · policy)</div>
+        <div class="lrow"><span class="lswatch" style="background:#7c8ca0"></span> Redis (session cache)</div>
+        <div class="lrow"><span class="lswatch" style="background:#2fe0c6"></span> External / hosted service</div>
+        <div class="lrow"><span class="lswatch" style="background:#3a4756"></span> Present, not used this walkthrough</div>
+        <h5 style="margin-top:12px">Pulse colors</h5>
+        <div class="lrow"><span class="lline" style="border-color:#e8a33d"></span> Trade message (Beckn action)</div>
+        <div class="lrow"><span class="lline" style="border-color:#2fe0c6"></span> Ledger write</div>
+        <div class="lrow"><span class="lline" style="border-color:#ff5a4e"></span> Rejected (NACK)</div>
+      </div>
+    </div>
+    <div id="stage3d">
+      <div id="graph3d"></div>
+      <div id="resetCtl3d"><button id="resetView3d" type="button" title="Reset to the default framing">&#8862; Reset view</button></div>
+      <div id="hint3d">drag to <b>orbit</b> &middot; scroll to <b>zoom</b> &middot; right-drag to <b>pan</b> &middot; click a node to inspect it</div>
+    </div>
+    <div id="detail">
+      <div id="detailHead">
+        <div class="kk" id="dKicker">STANDBY</div>
+        <div class="tt" id="dTitle">Pick a flow above, or click any node.</div>
+      </div>
+      <div id="detailBody"><div class="empty-hint">Click <b>Discover</b>, <b>Publish</b>, or any flow above to load its real hop sequence &mdash; then step through it, or click any node/hop at any time to inspect it.</div></div>
+    </div>
+  </div>
+
+  <div id="transport">
+    <button class="tbtn" id="backBtn" title="Previous hop">&#9664;</button>
+    <button class="tbtn" id="playBtn" title="Play / Pause">&#9654;</button>
+    <button class="tbtn" id="stepBtn" title="Next hop">&#9654;&#9654;</button>
+    <div id="speedCtl">
+      <span class="sc-k">Speed</span>
+      <input id="speedSlider" type="range" min="0.25" max="4" step="0.05" value="1">
+      <span id="speedLabel">1&times;</span>
+    </div>
+    <div id="hopRail"></div>
+    <div id="hopLabel">&mdash;</div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/3d-force-graph@1.70.5/dist/3d-force-graph.min.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  // ================================================================
+  // REAL TOPOLOGY — every node is an actual container from the live
+  // devkits/p2p-trading-ies-wave2 docker-compose stack. Positions are
+  // hand-placed to mirror the real bap_side / bpp_side network split,
+  // with beckn-router as the sole bridge (matches install/Caddyfile).
+  // ================================================================
+  var C = { amber: "#e8a33d", onix: "#6fa8dc", redis: "#7c8ca0", ext: "#2fe0c6", dormant: "#3a4756", alert: "#ff5a4e" };
+
+  var NODES = {
+    "sandbox-buyerapp":   { x: 230,  y: 150, z: 70,  r: 22, color: C.amber, label: "BuyerApp", sub: "sandbox-buyerapp:3001", tag: "BAP business logic",
+      desc: "The buyer prosumer's trading platform. Decides to discover, init, and confirm — the actual business logic lives here, not in the protocol adapter." },
+    "onix-buyerapp":      { x: 230,  y: 320, z: 0,   r: 24, color: C.onix, label: "onix-buyerapp", sub: ":8081", tag: "Protocol adapter",
+      desc: "The Beckn-Onix adapter fronting BuyerApp. Every message in or out passes through one of its four handlers (bapTxnCaller, bapTxnReceiver, bppTxnCaller, bppTxnReceiver) — signing, verifying, schema-checking, and policy-checking, per the real config." },
+    "redis-bap":          { x: 90,   y: 320, z: -60, r: 13, color: C.redis, label: "redis", sub: ":6379", tag: "Session cache",
+      desc: "In-memory cache used by onix-buyerapp for transaction state and idempotency. Not part of the message path itself." },
+
+    "sandbox-sellerapp":  { x: 1170, y: 150, z: 70,  r: 22, color: C.amber, label: "SellerApp", sub: "sandbox-sellerapp:3002", tag: "BPP business logic",
+      desc: "The seller prosumer's (TPDDL) trading platform. Publishes the offer and confirms trades — the business logic lives here." },
+    "onix-sellerapp":     { x: 1170, y: 320, z: 0,   r: 24, color: C.onix, label: "onix-sellerapp", sub: ":8082", tag: "Protocol adapter",
+      desc: "The Beckn-Onix adapter fronting SellerApp. This is where the seller-discom's own published policy is fetched and evaluated — the one place a trade can actually be rejected." },
+    "redis-bpp":          { x: 1310, y: 320, z: -60, r: 13, color: C.redis, label: "redis", sub: ":6379", tag: "Session cache",
+      desc: "In-memory cache used by onix-sellerapp for transaction state and idempotency. Not part of the message path itself." },
+
+    "router":             { x: 700,  y: 300, z: 30,  r: 26, color: "#f4c07a", label: "beckn-router", sub: "Caddy · :9000", tag: "The only bridge",
+      desc: "A Caddy reverse proxy — the single container with a foot in both docker networks. Routes purely by HTTP Host header: buyerapp.example.com, sellerapp.example.com, seller-discom-ledger.example.com, etc. It does not sign, verify, or inspect payloads — pure transport." },
+    "catalog":            { x: 700,  y: 110, z: 90,  r: 18, color: C.ext, label: "Catalog / Discovery", sub: "shared endpoint", tag: "Network infra",
+      desc: "Wave2's catalog-publish and discover services share one hosted backend (per the devkit's own README) — SellerApp publishes offers here, BuyerApp searches them here." },
+
+    "onix-ledger-sellerdiscom":  { x: 1170, y: 490, z: -20, r: 18, color: C.onix, label: "onix-ledger-\nsellerdiscom", sub: ":8083", tag: "Seller discom ledger adapter",
+      desc: "Protocol adapter for TPDDL's regulated ledger TSP. Receives the cascaded on_confirm/on_status that onix-sellerapp's degledgerrecorder plugin forwards here." },
+    "sandbox-ledger-sellerdiscom": { x: 1170, y: 610, z: 20, r: 15, color: C.amber, label: "SellerDiscom\nLedger", sub: "sandbox:3003", tag: "TPDDL ledger TSP",
+      desc: "TPDDL's own regulated ledger service — records the seller's side of every settled trade." },
+
+    "onix-ledger-buyerdiscom":   { x: 230,  y: 490, z: -20, r: 18, color: C.onix, label: "onix-ledger-\nbuyerdiscom", sub: ":8084", tag: "Buyer discom ledger adapter",
+      desc: "Protocol adapter for BRPL's regulated ledger TSP. Receives the cascaded on_confirm/on_status that onix-buyerapp's degledgerrecorder plugin forwards here." },
+    "sandbox-ledger-buyerdiscom": { x: 230,  y: 610, z: 20, r: 15, color: C.amber, label: "BuyerDiscom\nLedger", sub: "sandbox:3004", tag: "BRPL ledger TSP",
+      desc: "BRPL's own regulated ledger service — records the buyer's side of every settled trade." },
+
+    "onix-buyerdiscom":   { x: 460, y: 610, z: -100, r: 14, color: C.dormant, label: "onix-buyerdiscom", sub: ":8085", tag: "Not used this walkthrough",
+      desc: "The BRPL utility itself (distinct from its ledger TSP above) — a real participant in the devkit's meter-data workflows. We didn't exercise those live, so it sits idle here." },
+    "onix-sellerdiscom":  { x: 940, y: 610, z: -100, r: 14, color: C.dormant, label: "onix-sellerdiscom", sub: ":8086", tag: "Not used this walkthrough",
+      desc: "The TPDDL utility itself (distinct from its ledger TSP above) — a real participant in the devkit's meter-data workflows. We didn't exercise those live, so it sits idle here." },
+
+    "ies-ledger":         { x: 700,  y: 730, z: 160, r: 20, color: C.ext, label: "IES Energy Ledger", sub: "ies-p2p-energy-ledger.beckn.io", tag: "Real, external, hosted",
+      desc: "The actual hosted DEG ledger service, reached directly over the real internet (not through the local beckn-router). We independently re-queried this after the run and found our trades really there." }
+  };
+
+  // Structural edges (always drawn, dim). "via" edges route through router.
+  var EDGES = [
+    ["sandbox-buyerapp", "onix-buyerapp"], ["onix-buyerapp", "redis-bap"], ["onix-buyerapp", "router"],
+    ["sandbox-sellerapp", "onix-sellerapp"], ["onix-sellerapp", "redis-bpp"], ["onix-sellerapp", "router"],
+    ["router", "catalog"],
+    ["router", "onix-ledger-sellerdiscom"], ["onix-ledger-sellerdiscom", "sandbox-ledger-sellerdiscom"],
+    ["router", "onix-ledger-buyerdiscom"], ["onix-ledger-buyerdiscom", "sandbox-ledger-buyerdiscom"],
+    ["router", "onix-buyerdiscom"], ["router", "onix-sellerdiscom"],
+    ["onix-sellerapp", "ies-ledger", true]
+  ];
+
+  // ================================================================
+  // REAL processor steps, one-line teaching descriptions grounded in
+  // the actual onix config YAMLs (devkits/p2p-trading-ies-wave2/config/).
+  // ================================================================
+  var STEPDEFS = {
+    reqpreprocessor:       "Assigns/validates the transaction & message IDs before anything else runs.",
+    validateSign:          "Verifies the Ed25519 signature against the sender's public key, resolved from the DeDi registry.",
+    checkPolicy:           "Evaluates the network-wide OPA policy — the same rules apply to every message on this network.",
+    addRoute:              "Looks up the recipient's real endpoint via the DeDi registry — resolves exactly where this message goes next.",
+    validateSchema:        "Validates the payload's JSON structure against the official Beckn + DEG JSON-LD schemas.",
+    contractpolicyenforcer:"Fetches the seller-discom's own published policy (a real DeDi record) and evaluates it against this message.",
+    sign:                  "Signs the outgoing message with this participant's own private key so the receiver can verify it.",
+    degledgerrecorder:     "Forwards a copy of the trade to the relevant discom's ledger service — and, for the seller, to the external IES ledger too."
+  };
+
+  function step(id, hit, note) { return { id: id, hit: !!hit, note: note || "" }; }
+
+  // ================================================================
+  // REAL payloads, captured verbatim from the actual live run
+  // (p2p-trading/demo-logs/) and the devkit's own example fixtures
+  // (devkits/p2p-trading-ies-wave2/uc1/examples/).
+  // ================================================================
+  var PAY = {};
+
+  PAY.discover = { context: { networkId: "indiaenergystack.in/test-ies-p2p-trading-network", action: "discover", bapId: "buyerapp.example.com", transactionId: "1268c204-675b-4adb-9321-b08231b147b2", messageId: "258ed231-2def-4840-86ed-2970320c2294", timestamp: "2026-04-25T09:00:00Z" },
+    message: { intent: { filters: { type: "jsonpath", expression: '$.catalogs[*].offers[*] ? (@.offerAttributes."@type" == "EnergyTradeOffer")' } } } };
+
+  PAY.publishCatalog = { context: { networkId: "indiaenergystack.in/test-ies-p2p-trading-network", action: "catalog/publish", bppId: "sellerapp.example.com", timestamp: "2026-04-25T06:00:00Z" },
+    message: { catalogs: [{ id: "catalog-p2p-energy-2026-04", descriptor: { name: "Inter-Discom P2P Solar Energy", shortDesc: "Rooftop solar energy from prosumers, traded across discoms" },
+      provider: { id: "sellerapp.example.com", descriptor: { name: "Prosumer Solar Farm - North Delhi" } },
+      offers: [{ id: "offer-p2p-001", descriptor: { name: "Morning Solar - 2 hourly slots from 10:00 IST", shortDesc: "12 INR/kWh (slot 0) and 14 INR/kWh (slot 1)" },
+        offerAttributes: { "@type": "EnergyTradeOffer",
+          contractAttributes: { "@type": "DEGContract", roles: [ { role: "sellerPlatform", participantId: "sellerapp.example.com" }, { role: "sellerDiscom", participantId: "TEST_DISCOM_SELLER" } ] },
+          commitmentAttributes: { intervals: [ { id: 0, payloads: [{ type: "PRICE_PER_KWH", values: [12.5] }, { type: "AVAILABLE_QTY", values: [30.5] }] }, { id: 1, payloads: [{ type: "PRICE_PER_KWH", values: [14.5] }, { type: "AVAILABLE_QTY", values: [25.5] }] } ] } } }] }] } };
+
+  PAY.init = { context: { networkId: "indiaenergystack.in/test-ies-p2p-trading-network", action: "init", bapId: "buyerapp.example.com", bppId: "sellerapp.example.com", transactionId: "1268c204-675b-4adb-9321-b08231b147b2", messageId: "d87a9552-d8b5-4406-a514-3268503f44c8", timestamp: "2026-04-25T10:05:00Z" },
+    message: { contract: { status: { code: "DRAFT" },
+      commitments: [{ id: "commitment-p2p-001", commitmentAttributes: { intervals: [ { id: 0, payloads: [{ type: "PRICE_PER_KWH", values: [12.5] }, { type: "REQUESTED_QTY", values: [20.5] }] }, { id: 1, payloads: [{ type: "PRICE_PER_KWH", values: [14.5] }, { type: "REQUESTED_QTY", values: [15.5] }] } ] } }],
+      contractAttributes: { "@type": "DEGContract", roles: [ { role: "buyerPlatform", participantId: "buyerapp.example.com" }, { role: "sellerPlatform", participantId: "sellerapp.example.com" }, { role: "buyerDiscom", participantId: "TEST_DISCOM_BUYER" }, { role: "sellerDiscom", participantId: "TEST_DISCOM_SELLER" } ],
+        policy: { url: "https://api.dedi.global/dedi/lookup/indiaenergystack.in/ies-rulesets/p2p-trading-ies-contractpolicy-common" } } } } };
+
+  PAY.initBlocked = { context: { networkId: "indiaenergystack.in/test-ies-p2p-trading-network", action: "init", bapId: "buyerapp.example.com", bppId: "sellerapp.example.com", transactionId: "7f3d9c11-2a48-4a02-9d35-5cd2f60e2a71", messageId: "0b7c4a89-63f2-4b1d-8a54-9e1d0c7b3f26", timestamp: "2026-04-25T10:05:00Z" },
+    message: { contract: { status: { code: "DRAFT" },
+      contractAttributes: { "@type": "DEGContract", roles: [ { role: "buyerPlatform", participantId: "buyerapp.example.com" }, { role: "sellerPlatform", participantId: "sellerapp.example.com" }, { role: "buyerDiscom", participantId: "TEST_OUTSIDE_DISCOM" }, { role: "sellerDiscom", participantId: "TEST_DISCOM_SELLER" } ] } } } };
+
+  PAY.nack = { message: { status: "NACK", messageId: "0b7c4a89-63f2-4b1d-8a54-9e1d0c7b3f26",
+    error: { code: "Bad Request", message: 'BAD Request: settlement policy violations: buyer discom "TEST_OUTSIDE_DISCOM" is not allowed to trade with this discom\'s prosumers on the test network (allowed: ["BRPL", "PaVVNL", "TEST_DISCOM_BUYER", "TEST_DISCOM_SELLER", "TPDDL"])' } } };
+
+  PAY.onInit = { context: { networkId: "indiaenergystack.in/test-ies-p2p-trading-network", action: "on_init", bapId: "buyerapp.example.com", bppId: "sellerapp.example.com", transactionId: "1268c204-675b-4adb-9321-b08231b147b2" },
+    message: { contract: { status: { code: "DRAFT" }, commitments: [{ id: "commitment-p2p-001", status: { descriptor: { code: "DRAFT" } } }] } } };
+
+  PAY.confirm = { context: { networkId: "indiaenergystack.in/test-ies-p2p-trading-network", action: "confirm", bapId: "buyerapp.example.com", bppId: "sellerapp.example.com", transactionId: "1268c204-675b-4adb-9321-b08231b147b2", timestamp: "2026-04-25T10:10:00Z" },
+    message: { contract: { status: { code: "DRAFT" }, id: "contract-p2p-001",
+      settlements: [{ id: "settlement-p2p-001", status: "PENDING", settlementAttributes: { payTo: { accountHolderName: "Seller Platform Pvt Ltd", bankName: "HDFC Bank" }, paymentTrigger: "ON_FULFILLMENT" } }] } } };
+
+  PAY.onConfirm = { context: { networkId: "indiaenergystack.in/test-ies-p2p-trading-network", action: "on_confirm", bapId: "buyerapp.example.com", bppId: "sellerapp.example.com", transactionId: "1268c204-675b-4adb-9321-b08231b147b2" },
+    message: { contract: { status: { code: "ACTIVE" }, id: "contract-p2p-001", commitments: [{ id: "commitment-p2p-001", status: { descriptor: { code: "ACTIVE" } } }],
+      participants: [ { id: "TEST_DISCOM_SELLER", participantAttributes: { "@type": "DiscomLedgerProvider", ledgerId: "seller-discom-ledger.example.com", ledgerUri: "http://seller-discom-ledger.example.com:9000" } } ] } } };
+
+  PAY.onStatusSettled = { context: { networkId: "indiaenergystack.in/test-ies-p2p-trading-network", action: "on_status", bapId: "buyerapp.example.com", bppId: "sellerapp.example.com", transactionId: "1268c204-675b-4adb-9321-b08231b147b2", timestamp: "2026-04-26T06:30:00Z" },
+    message: { contract: { id: "contract-p2p-001", status: { code: "COMPLETE" },
+      commitments: [{ id: "commitment-p2p-001", status: { descriptor: { code: "CLOSED" } },
+        commitmentAttributes: { intervals: [
+          { id: 0, payloads: [{ type: "FINAL_ALLOC", values: [18.5] }] },
+          { id: 1, payloads: [{ type: "FINAL_ALLOC", values: [14.2] }] } ] } }],
+      consideration: [{ id: "auto-settlement-flows", considerationAttributes: { "@type": "RevenueFlow", revenueFlows: [
+        { role: "sellerPlatform", value: 437.15, currency: "INR", description: "Energy sale proceeds (18.5 kWh × ₹12.5 + 14.2 kWh × ₹14.5)" },
+        { role: "buyerPlatform", value: -437.15, currency: "INR", description: "Energy purchase cost (18.5 kWh × ₹12.5 + 14.2 kWh × ₹14.5)" } ] } }],
+      settlements: [{ id: "payment-p2p-001", status: "COMPLETE", settlementAttributes: { "@type": "PaymentAction", amount: { currency: "INR", value: 437.15 }, paymentStatus: "SETTLED", txnRef: "TXN-P2P-001-SETTLED" } }] } } };
+
+  // ================================================================
+  // REAL flows — each hop's from/to/via, handler, real processor
+  // chain (from the actual onix YAMLs), and real payload.
+  // ================================================================
+  function hop(o) { return o; }
+
+  var FLOWS = [
+    { id: "publish", label: "Publish", fn: "catalog/publish", tone: "amber",
+      summary: "SellerApp lists 30 kWh of TPDDL rooftop solar across two price bands.",
+      hops: [
+        hop({ from: "sandbox-sellerapp", to: "router", via: null, handler: "onix-sellerapp · bppTxnCaller", path: "/bpp/caller/", action: "catalog/publish", outcome: "ack",
+          steps: [ step("contractpolicyenforcer", true, "publish self-check: is this offer within the seller's own policy limits?"), step("validateSchema", true), step("checkPolicy", true), step("addRoute", true), step("sign", true) ],
+          payload: PAY.publishCatalog, note: "This is the one-time catalog listing — not part of the per-trade round trip." }),
+        hop({ from: "router", to: "catalog", via: null, handler: "beckn-router", path: "→ Catalog/Discovery", action: "catalog/publish", outcome: "ack",
+          steps: [], payload: null, note: "Caddy proxies by Host header — pure transport, no inspection." })
+      ] },
+
+    { id: "discover", label: "Discover", fn: "discover", tone: "amber",
+      summary: "BuyerApp (BRPL) searches the network and finds the offer.",
+      hops: [
+        hop({ from: "sandbox-buyerapp", to: "router", via: null, handler: "onix-buyerapp · bapTxnCaller", path: "/bap/caller/", action: "discover", outcome: "ack",
+          steps: [ step("contractpolicyenforcer", false, "not in this handler's enforced actions (select/init/confirm only) — passes through untouched"), step("validateSchema", true), step("checkPolicy", true), step("addRoute", true), step("sign", true) ],
+          payload: PAY.discover, note: null }),
+        hop({ from: "router", to: "catalog", via: null, handler: "beckn-router", path: "→ Catalog/Discovery", action: "discover", outcome: "ack",
+          steps: [], payload: null, note: "The discover call hits the shared catalog/discovery backend directly — outside this devkit's own topology." })
+      ] },
+
+    { id: "init", label: "Init", fn: "init → on_init", tone: "amber",
+      summary: "Buyer and seller exchange identity — meter IDs, discom roles — before confirming.",
+      hops: [
+        hop({ from: "sandbox-buyerapp", to: "onix-buyerapp", via: null, handler: "onix-buyerapp · bapTxnCaller", path: "/bap/caller/", action: "init", outcome: "ack",
+          steps: [ step("contractpolicyenforcer", true, "buyer-side self-check against the policy already linked in the offer"), step("validateSchema", true), step("checkPolicy", true), step("addRoute", true), step("sign", true) ],
+          payload: PAY.init }),
+        hop({ from: "onix-buyerapp", to: "router", via: null, handler: "beckn-router", path: "Host: sellerapp.example.com", action: "init", outcome: "ack", steps: [], payload: null }),
+        hop({ from: "router", to: "onix-sellerapp", via: null, handler: "onix-sellerapp · bppTxnReceiver", path: "/bpp/receiver/", action: "init", outcome: "ack",
+          steps: [ step("validateSign", true, "verifies BuyerApp's Ed25519 signature via its DeDi record"), step("checkPolicy", true), step("addRoute", true), step("validateSchema", true),
+            step("contractpolicyenforcer", true, "fetches TEST_DISCOM_SELLER's own published policy and checks TEST_DISCOM_BUYER against its allowlist — PASSES here"), step("degledgerrecorder", false, "init isn't in this handler's actions (status only)") ],
+          payload: PAY.init, note: "This is the exact enforcement point — same step that rejects the blocked-discom flow." }),
+        hop({ from: "onix-sellerapp", to: "sandbox-sellerapp", via: null, handler: "→ business logic", path: "", action: "init", outcome: "ack", steps: [], payload: null, note: "Synchronous 200 ACK. on_init follows asynchronously." }),
+        hop({ from: "sandbox-sellerapp", to: "onix-sellerapp", via: null, handler: "onix-sellerapp · bppTxnCaller", path: "/bpp/caller/", action: "on_init", outcome: "async",
+          steps: [ step("contractpolicyenforcer", false, "on_init isn't publish/on_status — passes through"), step("validateSchema", true), step("checkPolicy", true), step("addRoute", true), step("sign", true), step("degledgerrecorder", false, "on_init not in actions (on_confirm,on_status only)") ],
+          payload: PAY.onInit }),
+        hop({ from: "onix-sellerapp", to: "router", via: null, handler: "beckn-router", path: "Host: buyerapp.example.com", action: "on_init", outcome: "async", steps: [], payload: null }),
+        hop({ from: "router", to: "onix-buyerapp", via: null, handler: "onix-buyerapp · bapTxnReceiver", path: "/bap/receiver/", action: "on_init", outcome: "async",
+          steps: [ step("validateSign", true), step("checkPolicy", true), step("addRoute", true), step("validateSchema", true), step("contractpolicyenforcer", false, "not on_status — passes through"), step("degledgerrecorder", false, "not on_confirm/on_status") ],
+          payload: PAY.onInit }),
+        hop({ from: "onix-buyerapp", to: "sandbox-buyerapp", via: null, handler: "→ business logic", path: "", action: "on_init", outcome: "ack", steps: [], payload: null })
+      ] },
+
+    { id: "confirm", label: "Confirm", fn: "confirm → on_confirm", tone: "amber",
+      summary: "The trade is confirmed — and the ledger cascade fires for the first time.",
+      hops: [
+        hop({ from: "sandbox-buyerapp", to: "onix-buyerapp", via: null, handler: "onix-buyerapp · bapTxnCaller", path: "/bap/caller/", action: "confirm", outcome: "ack",
+          steps: [ step("contractpolicyenforcer", true, "buyer-side self-check, enforced"), step("validateSchema", true), step("checkPolicy", true), step("addRoute", true), step("sign", true) ], payload: PAY.confirm }),
+        hop({ from: "onix-buyerapp", to: "router", via: null, handler: "beckn-router", path: "Host: sellerapp.example.com", action: "confirm", outcome: "ack", steps: [], payload: null }),
+        hop({ from: "router", to: "onix-sellerapp", via: null, handler: "onix-sellerapp · bppTxnReceiver", path: "/bpp/receiver/", action: "confirm", outcome: "ack",
+          steps: [ step("validateSign", true), step("checkPolicy", true), step("addRoute", true), step("validateSchema", true), step("contractpolicyenforcer", true, "enforced again — the discom allowlist check runs on every trade-forming action"), step("degledgerrecorder", false) ],
+          payload: PAY.confirm }),
+        hop({ from: "onix-sellerapp", to: "sandbox-sellerapp", via: null, handler: "→ business logic", path: "", action: "confirm", outcome: "ack", steps: [], payload: null, note: "Both platforms now log the trade to their own discom ledger, off-band." }),
+        hop({ from: "sandbox-sellerapp", to: "onix-sellerapp", via: null, handler: "onix-sellerapp · bppTxnCaller", path: "/bpp/caller/", action: "on_confirm", outcome: "async",
+          steps: [ step("contractpolicyenforcer", false), step("validateSchema", true), step("checkPolicy", true), step("addRoute", true), step("sign", true),
+            step("degledgerrecorder", true, "on_confirm IS in this handler's actions — fires the ledger cascade, live") ],
+          payload: PAY.onConfirm, note: "degledgerrecorder now forwards a copy to seller-discom-ledger AND directly to the external IES ledger." }),
+        hop({ from: "onix-sellerapp", to: "onix-ledger-sellerdiscom", via: "router", handler: "cascade · sellerDiscom ledger", path: "via beckn-router", action: "on_confirm", outcome: "async",
+          steps: [], payload: PAY.onConfirm, note: "Real, local cascade — recorded at TPDDL's own ledger TSP." }),
+        hop({ from: "onix-sellerapp", to: "ies-ledger", via: null, handler: "cascade · external ledger", path: "direct, over the real internet", action: "on_confirm", outcome: "async",
+          steps: [], payload: PAY.onConfirm, note: "This is the hop we independently re-verified afterward — the trade really landed here." }),
+        hop({ from: "onix-sellerapp", to: "router", via: null, handler: "beckn-router", path: "Host: buyerapp.example.com", action: "on_confirm", outcome: "async", steps: [], payload: null }),
+        hop({ from: "router", to: "onix-buyerapp", via: null, handler: "onix-buyerapp · bapTxnReceiver", path: "/bap/receiver/", action: "on_confirm", outcome: "async",
+          steps: [ step("validateSign", true), step("checkPolicy", true), step("addRoute", true), step("validateSchema", true), step("contractpolicyenforcer", false),
+            step("degledgerrecorder", true, "on_confirm is in this handler's actions too — cascades to the buyer's own discom") ], payload: PAY.onConfirm }),
+        hop({ from: "onix-buyerapp", to: "onix-ledger-buyerdiscom", via: "router", handler: "cascade · buyerDiscom ledger", path: "via beckn-router", action: "on_confirm", outcome: "async",
+          steps: [], payload: PAY.onConfirm, note: "Real, local cascade — recorded at BRPL's own ledger TSP." }),
+        hop({ from: "onix-buyerapp", to: "sandbox-buyerapp", via: null, handler: "→ business logic", path: "", action: "on_confirm", outcome: "ack", steps: [], payload: null })
+      ] },
+
+    { id: "settle", label: "Settle", fn: "on_status (settled)", tone: "amber",
+      summary: "The payoff: after delivery, policy computes the real revenue split — ₹437.15.",
+      hops: [
+        hop({ from: "sandbox-sellerapp", to: "onix-sellerapp", via: null, handler: "onix-sellerapp · bppTxnCaller", path: "/bpp/caller/", action: "on_status", outcome: "async",
+          steps: [ step("contractpolicyenforcer", true, "on_status IS enforced here — this is the exact step that computes revenueFlows"), step("validateSchema", true), step("checkPolicy", true), step("addRoute", true), step("sign", true), step("degledgerrecorder", false, "not in this handler's actions (on_confirm only)") ],
+          payload: PAY.onStatusSettled, note: "18.5 kWh × ₹12.5 + 14.2 kWh × ₹14.5 = ₹437.15 to the seller, computed here — not typed anywhere." }),
+        hop({ from: "onix-sellerapp", to: "router", via: null, handler: "beckn-router", path: "Host: buyerapp.example.com", action: "on_status", outcome: "async", steps: [], payload: null }),
+        hop({ from: "router", to: "onix-buyerapp", via: null, handler: "onix-buyerapp · bapTxnReceiver", path: "/bap/receiver/", action: "on_status", outcome: "async",
+          steps: [ step("validateSign", true), step("checkPolicy", true), step("addRoute", true), step("validateSchema", true), step("contractpolicyenforcer", true, "injection-only on this side — the already-computed flows pass through"), step("degledgerrecorder", true, "on_status is enforced here — cascades the final settlement to buyerDiscom") ],
+          payload: PAY.onStatusSettled }),
+        hop({ from: "onix-buyerapp", to: "onix-ledger-buyerdiscom", via: "router", handler: "cascade · buyerDiscom ledger", path: "via beckn-router", action: "on_status", outcome: "async", steps: [], payload: PAY.onStatusSettled }),
+        hop({ from: "onix-buyerapp", to: "sandbox-buyerapp", via: null, handler: "→ business logic", path: "", action: "on_status", outcome: "ack", steps: [], payload: null })
+      ] },
+
+    { id: "blocked", label: "Rejected", fn: "init (blocked)", tone: "alert",
+      summary: "Same flow, a discom outside the allowlist — watch the exact step that rejects it.",
+      hops: [
+        hop({ from: "sandbox-buyerapp", to: "onix-buyerapp", via: null, handler: "onix-buyerapp · bapTxnCaller", path: "/bap/caller/", action: "init", outcome: "ack",
+          steps: [ step("contractpolicyenforcer", true, "buyer-side self-check passes — the buyer doesn't know the seller-discom's specific allowlist yet"), step("validateSchema", true), step("checkPolicy", true), step("addRoute", true), step("sign", true) ],
+          payload: PAY.initBlocked }),
+        hop({ from: "onix-buyerapp", to: "router", via: null, handler: "beckn-router", path: "Host: sellerapp.example.com", action: "init", outcome: "ack", steps: [], payload: null }),
+        hop({ from: "router", to: "onix-sellerapp", via: null, handler: "onix-sellerapp · bppTxnReceiver", path: "/bpp/receiver/", action: "init", outcome: "nack",
+          steps: [ step("validateSign", true), step("checkPolicy", true), step("addRoute", true), step("validateSchema", true),
+            step("contractpolicyenforcer", true, "fetches TEST_DISCOM_SELLER's policy — TEST_OUTSIDE_DISCOM is NOT in allowed_buyer_discoms → violation → 400 NACK, synchronously") ],
+          payload: PAY.nack, note: "The contract never forms. sandbox-sellerapp's business logic is never even reached." })
+      ] }
+  ];
+
+  // ================================================================
+  // SVG rendering
+  // ================================================================
+  var svgNS = "http://www.w3.org/2000/svg";
+  var svg = document.getElementById("net");
+
+  function el(tag, attrs) {
+    var e = document.createElementNS(svgNS, tag);
+    for (var k in attrs) e.setAttribute(k, attrs[k]);
+    return e;
+  }
+
+  function nodePos(id) { var n = NODES[id]; return { x: n.x, y: n.y }; }
+
+  // region backgrounds
+  function drawRegions() {
+    var bap = el("rect", { class: "region-box", x: 20, y: 60, width: 420, height: 680, rx: 10 });
+    var bpp = el("rect", { class: "region-box", x: 960, y: 60, width: 420, height: 680, rx: 10 });
+    svg.appendChild(bap); svg.appendChild(bpp);
+    var l1 = el("text", { class: "region-label", x: 40, y: 82 }); l1.textContent = "bap_side (docker network)"; svg.appendChild(l1);
+    var l2 = el("text", { class: "region-label", x: 980, y: 82, "text-anchor": "start" }); l2.textContent = "bpp_side (docker network)"; svg.appendChild(l2);
+  }
+
+  var edgeEls = {};
+  function drawEdges() {
+    EDGES.forEach(function (e) {
+      var a = nodePos(e[0]), b = nodePos(e[1]);
+      var dashed = !!e[2];
+      var line = el("path", { class: "edge" + (dashed ? " dashed" : ""), d: "M" + a.x + "," + a.y + " L" + b.x + "," + b.y });
+      svg.appendChild(line);
+      edgeEls[e[0] + "|" + e[1]] = line;
+      edgeEls[e[1] + "|" + e[0]] = line;
+    });
+  }
+
+  var nodeEls = {};
+  function drawNodes() {
+    Object.keys(NODES).forEach(function (id) {
+      var n = NODES[id];
+      var g = el("g", { class: "node", "data-id": id });
+      var halo = el("circle", { cx: n.x, cy: n.y, r: n.r * 2.1, fill: n.color, opacity: 0.08 });
+      var glow = el("circle", { cx: n.x, cy: n.y, r: n.r * 1.4, fill: n.color, opacity: 0.16 });
+      var core = el("circle", { class: "node-circle", cx: n.x, cy: n.y, r: n.r, fill: n.color, opacity: 0.92 });
+      g.appendChild(halo); g.appendChild(glow); g.appendChild(core);
+
+      var tag = el("text", { class: "node-tag", x: n.x, y: n.y - n.r - 18 }); tag.textContent = n.tag; g.appendChild(tag);
+
+      var lines = n.label.split("\n");
+      lines.forEach(function (line, i) {
+        var lbl = el("text", { class: "node-label", x: n.x, y: n.y + n.r + 16 + i * 13 });
+        lbl.textContent = line; g.appendChild(lbl);
+      });
+      var sub = el("text", { class: "node-sub", x: n.x, y: n.y + n.r + 16 + lines.length * 13 + 2 }); sub.textContent = n.sub; g.appendChild(sub);
+
+      g.addEventListener("click", function () { if (dragMoved) return; showNodeDetail(id); });
+      svg.appendChild(g);
+      nodeEls[id] = { g: g, core: core, glow: glow, halo: halo, base: n.color };
+    });
+  }
+
+  drawRegions(); drawEdges(); drawNodes();
+
+  // ================================================================
+  // Pan & zoom (2D view) — viewBox-driven, mouse-wheel + drag, with
+  // +/- and reset buttons. A small movement threshold distinguishes a
+  // real drag from a click so node inspection still works normally.
+  // ================================================================
+  var svgWrap = document.getElementById("svgWrap");
+  var BASE_VB = { x: 0, y: 0, w: 1400, h: 800 };
+  var viewBox = { x: 0, y: 0, w: 1400, h: 800 };
+  var MIN_W = 350, MAX_W = 3200;
+  var dragMoved = false;
+
+  function applyViewBox() {
+    svg.setAttribute("viewBox", viewBox.x + " " + viewBox.y + " " + viewBox.w + " " + viewBox.h);
+  }
+
+  function zoomAt(clientX, clientY, factor) {
+    var rect = svgWrap.getBoundingClientRect();
+    var mx = (clientX - rect.left) / rect.width, my = (clientY - rect.top) / rect.height;
+    var pxOld = viewBox.x + mx * viewBox.w, pyOld = viewBox.y + my * viewBox.h;
+    var newW = Math.max(MIN_W, Math.min(MAX_W, viewBox.w * factor));
+    var newH = newW * (BASE_VB.h / BASE_VB.w);
+    viewBox.x = pxOld - mx * newW;
+    viewBox.y = pyOld - my * newH;
+    viewBox.w = newW; viewBox.h = newH;
+    applyViewBox();
+  }
+
+  svgWrap.addEventListener("wheel", function (e) {
+    e.preventDefault();
+    zoomAt(e.clientX, e.clientY, e.deltaY > 0 ? 1.14 : 1 / 1.14);
+  }, { passive: false });
+
+  var panState = null;
+  svgWrap.addEventListener("mousedown", function (e) {
+    panState = { startX: e.clientX, startY: e.clientY, vx: viewBox.x, vy: viewBox.y };
+    dragMoved = false;
+    svgWrap.classList.add("panning");
+  });
+  window.addEventListener("mousemove", function (e) {
+    if (!panState) return;
+    var dx = e.clientX - panState.startX, dy = e.clientY - panState.startY;
+    if (Math.abs(dx) > 4 || Math.abs(dy) > 4) dragMoved = true;
+    if (!dragMoved) return;
+    var rect = svgWrap.getBoundingClientRect();
+    viewBox.x = panState.vx - dx * (viewBox.w / rect.width);
+    viewBox.y = panState.vy - dy * (viewBox.h / rect.height);
+    applyViewBox();
+  });
+  window.addEventListener("mouseup", function () { panState = null; svgWrap.classList.remove("panning"); });
+
+  document.getElementById("zoomIn").addEventListener("click", function () {
+    var r = svgWrap.getBoundingClientRect();
+    zoomAt(r.left + r.width / 2, r.top + r.height / 2, 1 / 1.3);
+  });
+  document.getElementById("zoomOut").addEventListener("click", function () {
+    var r = svgWrap.getBoundingClientRect();
+    zoomAt(r.left + r.width / 2, r.top + r.height / 2, 1.3);
+  });
+  document.getElementById("zoomReset").addEventListener("click", function () {
+    viewBox = { x: BASE_VB.x, y: BASE_VB.y, w: BASE_VB.w, h: BASE_VB.h };
+    applyViewBox();
+  });
+
+  function flashNode(id, color, ms) {
+    var ne = nodeEls[id]; if (!ne) return;
+    if (ne._revert) clearTimeout(ne._revert);
+    ne.core.setAttribute("fill", color);
+    ne.glow.setAttribute("opacity", "0.55");
+    ne._revert = setTimeout(function () {
+      ne.core.setAttribute("fill", ne.base);
+      ne.glow.setAttribute("opacity", "0.16");
+      ne._revert = null;
+    }, ms || 900);
+  }
+
+  function flashEdge(fromId, toId, color, ms) {
+    var e = edgeEls[fromId + "|" + toId];
+    if (!e) return;
+    e.setAttribute("stroke", color);
+    e.setAttribute("stroke-width", "2.4");
+    e.setAttribute("opacity", "1");
+    setTimeout(function () {
+      e.setAttribute("stroke", "#1e2b3a");
+      e.setAttribute("stroke-width", "1.2");
+      e.setAttribute("opacity", "1");
+    }, ms || 900);
+  }
+
+  var packetEl = null;
+  function travelPacket(fromId, toId, color, durationMs, onDone) {
+    var a = nodePos(fromId), b = nodePos(toId);
+    if (packetEl && packetEl.parentNode) packetEl.parentNode.removeChild(packetEl);
+    var p = el("circle", { class: "packet", r: 5, fill: color, cx: a.x, cy: a.y });
+    svg.appendChild(p);
+    packetEl = p;
+    var start = null;
+    function frame(ts) {
+      if (!start) start = ts;
+      var t = Math.min(1, (ts - start) / durationMs);
+      var ease = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+      p.setAttribute("cx", a.x + (b.x - a.x) * ease);
+      p.setAttribute("cy", a.y + (b.y - a.y) * ease);
+      if (t < 1) requestAnimationFrame(frame);
+      else { if (p.parentNode) p.parentNode.removeChild(p); if (onDone) onDone(); }
+    }
+    requestAnimationFrame(frame);
+  }
+
+  // ================================================================
+  // 3D mode — same real NODES/EDGES data, rendered as a true 3D scene
+  // (three.js r128 + 3d-force-graph@1.70.5, pinned to versions verified
+  // compatible with each other) with full orbit/pan/zoom. Built lazily,
+  // only the first time the user actually asks for it.
+  // ================================================================
+  var mode = "2d";
+  var Graph3D = null;
+  var node3DRefs = {};
+  var links3D = [];
+  var GLOW_TEX_3D = null;
+  var active3DColor = "#e8a33d";
+
+  function glowTexture3D() {
+    var c = document.createElement("canvas");
+    c.width = c.height = 128;
+    var ctx = c.getContext("2d");
+    var g = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+    g.addColorStop(0, "rgba(255,255,255,0.9)");
+    g.addColorStop(0.35, "rgba(255,255,255,0.35)");
+    g.addColorStop(1, "rgba(255,255,255,0)");
+    ctx.fillStyle = g; ctx.fillRect(0, 0, 128, 128);
+    return new THREE.CanvasTexture(c);
+  }
+
+  function labelSprite3D(text, sub) {
+    var lines = text.split("\n");
+    var c = document.createElement("canvas");
+    var scale = 4;
+    c.width = 320 * scale; c.height = (44 + lines.length * 16) * scale;
+    var ctx = c.getContext("2d");
+    ctx.scale(scale, scale);
+    ctx.textAlign = "center";
+    ctx.fillStyle = "rgba(238,242,246,0.98)";
+    ctx.font = "700 17px 'JetBrains Mono', monospace";
+    lines.forEach(function (line, i) { ctx.fillText(line, 160, 20 + i * 19); });
+    ctx.fillStyle = "rgba(150,166,186,0.95)";
+    ctx.font = "500 13px 'JetBrains Mono', monospace";
+    ctx.fillText(sub, 160, 20 + lines.length * 19 + 17);
+    var tex = new THREE.CanvasTexture(c);
+    tex.minFilter = THREE.LinearFilter;
+    var spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+    spr.scale.set(62, 62 * (c.height / c.width), 1);
+    return spr;
+  }
+
+  function buildNode3D(datum) {
+    var n = NODES[datum.id];
+    var rad = n.r * 0.55;
+    var group = new THREE.Group();
+    var core = new THREE.Mesh(new THREE.SphereGeometry(rad, 20, 20), new THREE.MeshBasicMaterial({ color: n.color }));
+    group.add(core);
+    var haloScale = rad * (n.tag.indexOf("bridge") >= 0 ? 8 : 6.5);
+    var halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: GLOW_TEX_3D, color: n.color, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false }));
+    halo.scale.set(haloScale, haloScale, 1);
+    group.add(halo);
+    var lbl = labelSprite3D(n.label, n.sub);
+    lbl.position.set(0, -(rad + 9), 0);
+    group.add(lbl);
+    node3DRefs[datum.id] = { core: core, halo: halo, baseColor: n.color, haloBaseOpacity: 0.5, haloBaseScale: haloScale, revert: null };
+    return group;
+  }
+
+  // Compressed layout: the raw SVG coordinate spread (1400x800, z up to
+  // 160) reads as "sparse" in a real 3D camera — nodes far enough apart
+  // that you can't see both ends of a hop without panning. Scaling
+  // positions down keeps the same real structure legible by default,
+  // while depth (z) is compressed less aggressively so orbiting still
+  // reveals real depth.
+  var LAYOUT_SCALE = 0.5;
+  var LAYOUT_Z_SCALE = 0.7;
+  var INITIAL_CAM_POS = { x: 20, y: 40, z: 410 };
+  var INITIAL_CAM_LOOKAT = { x: 0, y: -10, z: 0 };
+
+  function ensure3D() {
+    if (Graph3D || typeof THREE === "undefined" || typeof ForceGraph3D === "undefined") return;
+    GLOW_TEX_3D = glowTexture3D();
+    var nodes3D = Object.keys(NODES).map(function (id) {
+      var n = NODES[id];
+      return { id: id, fx: (n.x - 700) * LAYOUT_SCALE, fy: (400 - n.y) * LAYOUT_SCALE, fz: n.z * LAYOUT_Z_SCALE };
+    });
+    links3D = EDGES.map(function (e) { return { source: e[0], target: e[1] }; });
+    Graph3D = ForceGraph3D()(document.getElementById("graph3d"))
+      .backgroundColor("#00000000")
+      .graphData({ nodes: nodes3D, links: links3D })
+      .nodeThreeObject(buildNode3D)
+      .nodeThreeObjectExtend(false)
+      .linkColor(function () { return "#26333f"; })
+      .linkOpacity(0.45)
+      .linkWidth(0.7)
+      .linkDirectionalParticleWidth(3)
+      .linkDirectionalParticleColor(function () { return active3DColor; })
+      .enableNodeDrag(false)
+      .showNavInfo(false)
+      .onNodeClick(function (node) { showNodeDetail(node.id); });
+    if (Graph3D.d3Force("charge")) Graph3D.d3Force("charge").strength(0);
+    if (Graph3D.d3Force("center")) Graph3D.d3Force("center", null);
+  }
+
+  // Re-applied every time 3D mode is entered (not just built once) so a
+  // prior session's rotation never carries over — always the same good
+  // framing on switch-in. Also used by the explicit Reset view button.
+  //
+  // The controls here are THREE.TrackballControls (confirmed via its
+  // property set — staticMoving/dynamicDampingFactor/noRotate/etc, not
+  // OrbitControls). It has its own damped-inertia loop that keeps
+  // recomputing the camera position from its internal drag state every
+  // render frame, so a plain cameraPosition() call gets fought and
+  // overwritten a frame or two later — a tween fares even worse, since
+  // it's fighting that every frame for its whole duration. Disabling the
+  // controls for one tick while we snap the camera is what actually
+  // sticks.
+  function resetCamera3D() {
+    if (!Graph3D) return;
+    var ctrls = Graph3D.controls && Graph3D.controls();
+    // TrackballControls.reset() is its own, correctly-implemented reset
+    // path (clears internal rotation/momentum state, not just position) —
+    // point its stored reset reference (position0/target0) at our framing
+    // and let it do the reset, rather than fighting its per-frame update
+    // loop with a plain cameraPosition() call, which it simply overwrites.
+    if (ctrls && ctrls.position0 && ctrls.target0 && ctrls.reset) {
+      ctrls.position0.set(INITIAL_CAM_POS.x, INITIAL_CAM_POS.y, INITIAL_CAM_POS.z);
+      ctrls.target0.set(INITIAL_CAM_LOOKAT.x, INITIAL_CAM_LOOKAT.y, INITIAL_CAM_LOOKAT.z);
+      ctrls.reset();
+    } else {
+      Graph3D.cameraPosition(INITIAL_CAM_POS, INITIAL_CAM_LOOKAT, 0);
+    }
+  }
+
+  function findLink3D(a, b) {
+    for (var i = 0; i < links3D.length; i++) {
+      var l = links3D[i];
+      var s = typeof l.source === "object" ? l.source.id : l.source;
+      var t = typeof l.target === "object" ? l.target.id : l.target;
+      if ((s === a && t === b) || (s === b && t === a)) return l;
+    }
+    return null;
+  }
+
+  function flashNode3D(id, color, ms) {
+    var ref = node3DRefs[id]; if (!ref) return;
+    if (ref.revert) clearTimeout(ref.revert);
+    ref.core.material.color.set(color);
+    ref.halo.material.opacity = Math.min(1, ref.haloBaseOpacity + 0.4);
+    ref.revert = setTimeout(function () {
+      ref.core.material.color.set(ref.baseColor);
+      ref.halo.material.opacity = ref.haloBaseOpacity;
+      ref.revert = null;
+    }, ms || 900);
+  }
+
+  function travelPacket3D(fromId, toId, color) {
+    active3DColor = color;
+    var link = findLink3D(fromId, toId);
+    if (link && Graph3D && Graph3D.emitParticle) Graph3D.emitParticle(link);
+  }
+
+  function enter3D() {
+    document.getElementById("stage3d").classList.add("show");
+    svgWrap.classList.add("hidden3d");
+    modeToggle.classList.add("in3d");
+    modeToggleLabel.textContent = "Back to 2D view";
+    ensure3D();
+    if (Graph3D) {
+      var r = document.getElementById("stage3d").getBoundingClientRect();
+      Graph3D.width(r.width || window.innerWidth).height(r.height || window.innerHeight);
+      resetCamera3D();
+    }
+    mode = "3d";
+  }
+
+  function exit3D() {
+    document.getElementById("stage3d").classList.remove("show");
+    svgWrap.classList.remove("hidden3d");
+    modeToggle.classList.remove("in3d");
+    modeToggleLabel.textContent = "Enter 3D mode";
+    mode = "2d";
+  }
+
+  var modeToggle = document.getElementById("modeToggle");
+  var modeToggleLabel = document.getElementById("modeToggleLabel");
+  modeToggle.addEventListener("click", function () { mode === "2d" ? enter3D() : exit3D(); });
+  document.getElementById("resetView3d").addEventListener("click", function () { window.__clickCount = (window.__clickCount || 0) + 1; resetCamera3D(); });
+
+  window.addEventListener("resize", function () {
+    if (Graph3D && mode === "3d") {
+      var r = document.getElementById("stage3d").getBoundingClientRect();
+      Graph3D.width(r.width).height(r.height);
+    }
+  });
+
+  // ================================================================
+  // JSON pretty-printer with light syntax tinting (no external lib)
+  // ================================================================
+  function renderJSON(obj) {
+    var json = JSON.stringify(obj, null, 2);
+    var esc = json.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    esc = esc.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+-]?\d+)?)/g, function (match) {
+      var cls = "jn";
+      if (/^"/.test(match)) cls = /:$/.test(match) ? "jk" : "js";
+      else if (/true|false/.test(match)) cls = "jb";
+      else if (/null/.test(match)) cls = "jb";
+      return '<span class="' + cls + '">' + match + "</span>";
+    });
+    return esc;
+  }
+
+  // ================================================================
+  // Detail panel
+  // ================================================================
+  var dKicker = document.getElementById("dKicker");
+  var dTitle = document.getElementById("dTitle");
+  var dBody = document.getElementById("detailBody");
+
+  function showNodeDetail(id) {
+    var n = NODES[id];
+    dKicker.textContent = n.tag.toUpperCase();
+    dTitle.textContent = n.label.replace(/\n/g, " ");
+    dBody.innerHTML =
+      '<div class="d-section"><h4>What this is</h4><div class="d-text">' + n.desc + '</div></div>' +
+      '<div class="d-section"><h4>Address</h4><dl class="meta-grid"><dt>Container</dt><dd>' + n.sub + '</dd></dl></div>';
+  }
+
+  function outcomeBadge(outcome) {
+    if (outcome === "nack") return '<span class="badge nack">400 · NACK</span>';
+    if (outcome === "async") return '<span class="badge async">async</span>';
+    return '<span class="badge ack">200 · ACK</span>';
+  }
+
+  function showHopDetail(flow, hopIdx) {
+    var h = flow.hops[hopIdx];
+    dKicker.textContent = flow.fn + " — hop " + (hopIdx + 1) + " / " + flow.hops.length;
+    dTitle.innerHTML = (h.handler || "") + " " + outcomeBadge(h.outcome);
+    var html = "";
+    if (h.note) html += '<div class="d-section"><div class="d-text">' + h.note + "</div></div>";
+    html += '<div class="d-section"><h4>Address</h4><dl class="meta-grid">' +
+      "<dt>From</dt><dd>" + (NODES[h.from] ? NODES[h.from].label.replace(/\n/g, " ") : h.from) + "</dd>" +
+      "<dt>To</dt><dd>" + (NODES[h.to] ? NODES[h.to].label.replace(/\n/g, " ") : h.to) + "</dd>" +
+      (h.path ? "<dt>Path</dt><dd>" + h.path + "</dd>" : "") +
+      "<dt>Action</dt><dd>" + h.action + "</dd>" +
+      "</dl></div>";
+    if (h.steps && h.steps.length) {
+      html += '<div class="d-section"><h4>Processor steps that ran</h4><ul class="step-list">';
+      h.steps.forEach(function (s) {
+        var def = STEPDEFS[s.id] || "";
+        html += '<li class="' + (s.hit ? "hit" : "noop") + '"><span class="sname">' + s.id + "</span><span class=\"sdesc\">" + (s.note || def) + "</span></li>";
+      });
+      html += "</ul></div>";
+    }
+    if (h.payload) {
+      html += '<div class="d-section"><h4>Real payload at this hop</h4><div class="payload-box">' + renderJSON(h.payload) + "</div></div>";
+    }
+    dBody.innerHTML = html;
+  }
+
+  // ================================================================
+  // Flow picker + transport controls
+  // ================================================================
+  var flowPicker = document.getElementById("flowPicker");
+  FLOWS.forEach(function (f) {
+    var b = document.createElement("button");
+    b.className = "flow-btn" + (f.tone === "alert" ? " tone-alert" : "");
+    b.innerHTML = '<span class="fn">' + (FLOWS.indexOf(f) + 1) + "</span>" + f.label;
+    b.addEventListener("click", function () { loadFlow(f.id); });
+    flowPicker.appendChild(b);
+  });
+
+  var hopRail = document.getElementById("hopRail");
+  var hopLabel = document.getElementById("hopLabel");
+  var backBtn = document.getElementById("backBtn");
+  var stepBtn = document.getElementById("stepBtn");
+  var playBtn = document.getElementById("playBtn");
+  var speedSlider = document.getElementById("speedSlider");
+  var speedLabel = document.getElementById("speedLabel");
+
+  // globalMode: true while Play is running (or paused mid-run) across the
+  // whole demo, flow after flow. A manual flow-tab click always breaks out
+  // of it back into single-flow manual browsing.
+  var current = { flow: null, idx: -1, playing: false, timer: null, globalMode: false, speed: 1 };
+
+  function fmtSpeed(v) {
+    var s = v.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
+    return s + "×";
+  }
+  function hopPauseMs() { return Math.max(150, 1900 / current.speed); }
+  function travelMs(manual) { return Math.max(80, (manual ? 500 : 700) / current.speed); }
+
+  speedSlider.addEventListener("input", function () {
+    current.speed = parseFloat(speedSlider.value);
+    speedLabel.textContent = fmtSpeed(current.speed);
+  });
+
+  function setFlowButtonsActive(id) {
+    Array.prototype.forEach.call(flowPicker.children, function (b, i) {
+      b.classList.toggle("active", FLOWS[i].id === id);
+    });
+  }
+
+  function loadFlow(id, opts) {
+    opts = opts || {};
+    if (!opts.keepPlaying) { stopPlay(); current.globalMode = false; }
+    var flow = FLOWS.filter(function (f) { return f.id === id; })[0];
+    current.flow = flow; current.idx = -1;
+    setFlowButtonsActive(id);
+    hopRail.innerHTML = "";
+    flow.hops.forEach(function (h, i) {
+      var t = document.createElement("div");
+      t.className = "hop-tick" + (h.outcome === "nack" ? " nack" : "");
+      t.textContent = i + 1;
+      t.addEventListener("click", function () { stopPlay(); current.globalMode = false; goTo(i, true); });
+      hopRail.appendChild(t);
+    });
+    dKicker.textContent = flow.fn.toUpperCase();
+    dTitle.textContent = flow.summary;
+    dBody.innerHTML = '<div class="empty-hint">' + flow.hops.length + " real hops in this flow. " +
+      (opts.keepPlaying ? "Continuing automatically&hellip;" : "Press <b>&#9654;&#9654; Step</b> to walk through it yourself, or <b>Play</b> to run the whole demo, start to finish.") + "</div>";
+    updateHopLabel();
+    updateTicks();
+    backBtn.disabled = true; stepBtn.disabled = false;
+  }
+
+  function updateHopLabel() {
+    if (!current.flow) { hopLabel.innerHTML = "&mdash;"; return; }
+    if (current.idx < 0) { hopLabel.innerHTML = "ready · <span class=\"n\">0</span> / " + current.flow.hops.length; return; }
+    hopLabel.innerHTML = "hop <span class=\"n\">" + (current.idx + 1) + "</span> / " + current.flow.hops.length;
+  }
+
+  function updateTicks() {
+    Array.prototype.forEach.call(hopRail.children, function (t, i) {
+      t.classList.toggle("done", i < current.idx);
+      t.classList.toggle("active", i === current.idx);
+    });
+  }
+
+  function goTo(idx, manual) {
+    if (!current.flow) return;
+    if (idx < 0 || idx >= current.flow.hops.length) return;
+    current.idx = idx;
+    var h = current.flow.hops[idx];
+    var color = h.outcome === "nack" ? "#ff5a4e" : (h.action === "on_confirm" && h.handler.indexOf("cascade") === 0 ? "#2fe0c6" : (h.handler.indexOf("cascade") === 0 ? "#2fe0c6" : "#e8a33d"));
+    if (mode === "3d") {
+      flashNode3D(h.from, color, 900);
+      travelPacket3D(h.from, h.to, color);
+      setTimeout(function () { flashNode3D(h.to, color, 900); }, manual ? 350 / current.speed : 500 / current.speed);
+    } else {
+      flashNode(h.from, color, 900);
+      travelPacket(h.from, h.to, color, travelMs(manual), function () {
+        flashNode(h.to, color, 900);
+        flashEdge(h.from, h.to, color, 900);
+      });
+    }
+    showHopDetail(current.flow, idx);
+    updateHopLabel(); updateTicks();
+    backBtn.disabled = idx <= 0;
+    stepBtn.disabled = idx >= current.flow.hops.length - 1;
+  }
+
+  backBtn.addEventListener("click", function () { stopPlay(); goTo(current.idx - 1, true); });
+  stepBtn.addEventListener("click", function () { stopPlay(); goTo(current.idx + 1, true); });
+
+  function stopPlay() {
+    current.playing = false;
+    if (current.timer) { clearTimeout(current.timer); current.timer = null; }
+    playBtn.innerHTML = "&#9654;";
+  }
+
+  // Global player: runs every flow in FLOWS order, start to finish
+  // (Publish → Discover → Init → Confirm → Settle → Rejected), auto-
+  // advancing into the next flow the moment the current one's real hops
+  // are exhausted — one continuous demo, not a per-tab replay.
+  function playNext() {
+    if (!current.playing || !current.flow) return;
+    var nextIdx = current.idx + 1;
+    if (nextIdx >= current.flow.hops.length) {
+      var nextFlow = FLOWS[FLOWS.indexOf(current.flow) + 1];
+      if (nextFlow && current.globalMode) {
+        loadFlow(nextFlow.id, { keepPlaying: true });
+        current.timer = setTimeout(playNext, hopPauseMs());
+        return;
+      }
+      stopPlay();
+      current.globalMode = false;
+      return;
+    }
+    goTo(nextIdx, false);
+    current.timer = setTimeout(playNext, hopPauseMs());
+  }
+
+  playBtn.addEventListener("click", function () {
+    if (current.playing) { stopPlay(); return; }
+    if (!current.globalMode) {
+      // Fresh start (not resuming a paused run): always the full demo,
+      // Publish through Rejected.
+      loadFlow(FLOWS[0].id, { keepPlaying: true });
+      current.globalMode = true;
+    }
+    current.playing = true;
+    playBtn.innerHTML = "&#10074;&#10074;";
+    if (current.idx >= current.flow.hops.length - 1) current.idx = -1;
+    playNext();
+  });
+
+  document.getElementById("legendToggle").addEventListener("click", function () {
+    document.getElementById("legend").classList.toggle("show");
+  });
+
+  // Start on the richest, most illustrative flow.
+  loadFlow("confirm");
+})();
+</script>
